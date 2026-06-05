@@ -1,97 +1,160 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Hot Updater — Quy trình Build & Deploy OTA
 
-# Getting Started
+- React Native 0.77+
+- Node.js 20+
+- Android SDK + ADB
+- Tài khoản Cloudflare (R2, D1, Workers)
+- File `.env.hotupdater` đã cấu hình đầy đủ
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+---
 
-## Step 1: Start Metro
+## 1. Lần đầu tiên — Build và cài APK lên thiết bị
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+Đây là bước cài bản native lên thiết bị. Chỉ cần làm một lần, hoặc khi có thay đổi native code.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### 1.1. Build release APK
 
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+```bash
+cd android && ./gradlew assembleRelease && cd ..
 ```
 
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+File APK sẽ được tạo tại:
+```
+android/app/build/outputs/apk/release/app-release.apk
 ```
 
-### iOS
+### 1.2. Cài APK lên thiết bị qua ADB
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+Kiểm tra thiết bị đã kết nối:
+```bash
+adb devices
 ```
 
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
+Cài APK:
+```bash
+adb install -r android/app/build/outputs/apk/release/app-release.apk
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+> **Lưu ý:** `-r` là replace — ghi đè lên bản cũ nếu đã cài rồi.
 
-```sh
-# Using npm
-npm run ios
+---
 
-# OR using Yarn
-yarn ios
+## 2. Deploy OTA Update (không cần build lại native)
+
+Dùng khi chỉ thay đổi JS/UI, không thay đổi native code.
+
+### 2.1. Sửa code trong App.tsx hoặc các file JS
+
+Ví dụ đổi text để nhận biết bản mới:
+```tsx
+<Text>Version 2 — đã cập nhật OTA</Text>
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+### 2.2. Deploy bundle lên Cloudflare R2 + D1
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+```bash
+npx hot-updater deploy -p android
+```
 
-## Step 3: Modify your app
+Hoặc deploy cả 2 platform:
+```bash
+npx hot-updater deploy
+```
 
-Now that you have successfully run the app, let's make changes!
+Hoặc deploy interactive + force reload:
+```bash
+npx hot-updater deploy -i -f
+```
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+CLI sẽ hỏi:
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+| Câu hỏi | Trả lời |
+|---|---|
+| Platform | android / ios |
+| Target app version | Phải khớp với `versionName` trong `android/app/build.gradle`, ví dụ `1.0` |
+| Channel | `production` |
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+> **Quan trọng:** `Target app version` phải khớp chính xác với `versionName` trong `android/app/build.gradle`. Nếu sai, app sẽ không nhận được update.
 
-## Congratulations! :tada:
+### 2.3. Kiểm tra deploy thành công
 
-You've successfully run and modified your React Native App. :partying_face:
+Log thành công sẽ hiện:
+```
+✅ Build Complete (bare)
+✅ Upload Complete (r2Storage)
+✅ Update Complete (d1Database)
+🚀 Deployment Successful
+```
 
-### Now what?
+---
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+## 3. Test update trên thiết bị
 
-# Troubleshooting
+1. Tắt app hoàn toàn trên điện thoại (swipe close)
+2. Mở lại app
+3. App sẽ tự động gọi check-update đến Cloudflare Worker
+4. Nếu có bản mới: hiện `fallbackComponent` trong lúc tải
+5. Sau khi tải xong: app reload với UI mới
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+---
 
-# Learn More
+## 4. Quản lý bundle — Console
 
-To learn more about React Native, take a look at the following resources:
+Mở web console để xem danh sách bundle, bật/tắt, rollback:
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+```bash
+npx hot-updater console
+```
+
+Truy cập tại: `http://localhost:1422`
+
+---
+
+## 5. Rollback về bản cũ
+
+Trong console tại `http://localhost:1422`, tìm bundle muốn rollback về → bấm **Disable** bundle hiện tại → app sẽ tự động dùng bundle cũ.
+
+Hoặc disable qua CLI:
+```bash
+npx hot-updater console
+```
+
+---
+
+## 6. Tóm tắt lệnh thường dùng
+
+```bash
+# Build release APK
+cd android && ./gradlew assembleRelease && cd ..
+
+# Cài APK lên thiết bị
+adb install -r android/app/build/outputs/apk/release/app-release.apk
+
+# Deploy OTA cho Android
+npx hot-updater deploy -p android
+
+# Deploy OTA cho iOS
+npx hot-updater deploy -p ios
+
+# Deploy cả 2 platform (interactive)
+npx hot-updater deploy -i
+
+# Deploy interactive + force reload ngay lập tức
+npx hot-updater deploy -i -f
+
+# Mở console quản lý
+npx hot-updater console
+
+# Kiểm tra cấu hình
+npx hot-updater doctor --server-base-url YOUR_URL
+```
+
+---
+
+## 7. Lưu ý quan trọng
+
+- **Debug build** không nhận OTA update — phải dùng **release build**
+- OTA chỉ update được **JS bundle**, không update được native code (Java/Kotlin/Swift)
+- Khi thay đổi native code (thêm package native, sửa Android/iOS code) phải build lại APK và cài lại qua ADB
+- File `.env.hotupdater` chứa credentials, không được commit lên git
+- `versionName` trong `build.gradle` phải khớp với `Target app version` khi deploy
